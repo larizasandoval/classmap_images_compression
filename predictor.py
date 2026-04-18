@@ -102,7 +102,7 @@ def encode_image(image: np.ndarray):
     """
     Aplica la predicción píxel a píxel en orden raster.
     Retorna una lista de listas de residuos 
-    residuals[row][col] = {'bits': [...], 'raw': int|None, 'matched_pk': int|None}
+    residuals[row][col] = {'bits': [...], 'raw': int|None}
     """
     H, W = image.shape
     residuals = [[None] * W for _ in range(H)]
@@ -198,3 +198,5 @@ if __name__ == '__main__':
     print(f"Test image:\n{test}")
     print("Residuals:")
     [print(dicc) for test_res in test_residuals for dicc in test_res]
+    print("Residual statistics:")
+    print(residual_stats(test_residuals))

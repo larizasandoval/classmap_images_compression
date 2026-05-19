@@ -1,3 +1,5 @@
 trash/
 piecewise_pixel_prediction.py
+test.py
+*.raw
 __pycache__/

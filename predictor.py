@@ -269,6 +269,7 @@ def entropy_pattern_context(symbol_stream, raw_stream, n_pixels):
 
     # Entropía de los valores crudos
     if raw_stream:
+        print("Esto es una prueba",np.unique(raw_stream) )
         bpp_raws = (entropy(raw_stream) * len(raw_stream))/ n_pixels 
     else:
         bpp_raws = 0.0
@@ -299,9 +300,11 @@ def pipeline(img):
         'bpp_bits'   : encoded['bpp_symbol'],
         'bpp_raw'      : encoded['bpp_raw'],
         'overhead_raw' : encoded['bpp_raw'] - entropy_info['bpp_raws'],
-        'overhead_relativo': (encoded['bpp_raw'] - entropy_info['bpp_raws']) / encoded['bpp_raw'] * 100 
-        #'encoded_data'    : encoded,
-    }
+        'overhead_relativo': (encoded['bpp_raw'] - entropy_info['bpp_raws']) / encoded['bpp_raw'] * 100 ,
+        '\\%_bpp_bit': (encoded['bpp_symbol'] / encoded['bpp_total']) * 100,
+        '\\%_bpp_raw': (encoded['bpp_raw'] / encoded['bpp_total']) * 100,
+        'real_impacto': (encoded['bpp_raw'] - entropy_info['bpp_raws']) / encoded['bpp_total'] * 100,
+       }
 
 def context_model_analysis(img):
     symbol_stream, raw_stream = encode_to_entropy_input(img)

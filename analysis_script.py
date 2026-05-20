@@ -8,10 +8,7 @@ from predictor import pipeline, residual_stats,context_model_analysis
 from sintetic_img_generator import generate_synthetic_map
 import os
 import numpy as np
-from collections import defaultdict
 import pandas as pd
-from matplotlib import pyplot as plt
-import seaborn as sns
 from plots import *
 
 #----------------------------

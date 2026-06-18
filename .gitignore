@@ -3,3 +3,10 @@ piecewise_pixel_prediction.py
 test.py
 *.raw
 __pycache__/
+analysis_script2.py
+pipeline2.py
+plots2.py
+sintetic_img_generator.py
+curated_images/
+curated_maps/
+analisis2/

@@ -1,7 +1,6 @@
 """
 Created on 2026-04-10
 Created by: Lariza Sandoval
-
 Piecewise Pixel Prediction — Sección II.A
 Xie & Klimesh, IPN Progress Report 42-169, 2007
 
@@ -23,7 +22,10 @@ Funciones:
 
 import numpy as np
 from aritmetic import arithmetic_encode, arithmetic_decode
+from ac_offline import arithmetic_encode_offline
 from collections import defaultdict
+#import pandas as pd
+
 
 def entropy(data):
     values, counts = np.unique(data, return_counts=True)
@@ -249,12 +251,20 @@ def entropy_pattern_context(symbol_stream, raw_stream, n_pixels):
         #tabla[(ctx, position)][bit] += 1
     #print(f"Tabla: {dict(tabla)}")
     # Entropía condicional de los bits de decisión
+
+    # Primera pasada — contar total de bits de decisión
+    n_decision_bits = sum(c[0] + c[1] for c in tabla.values())
+
+    # Segunda pasada — calcular entropía condicional
+    H_conditional = 0.0
+
     total_bits   = 0
     total_H_bits = 0.0
     #[print(f"Contexto {ctx}: {counts}") for ctx, counts in tabla.items()]
     for ctx, counts in tabla.items():
         ceros, unos = counts
         total = ceros + unos
+        p_ctx = total / n_decision_bits  # p(c)
         if total == 0:
             continue
         p0 = ceros / total
@@ -262,48 +272,74 @@ def entropy_pattern_context(symbol_stream, raw_stream, n_pixels):
         H_ctx = 0.0
         if p0 > 0: H_ctx -= p0 * np.log2(p0)
         if p1 > 0: H_ctx -= p1 * np.log2(p1)
+        H_conditional += p_ctx * H_ctx  # [bits/bit de decisión]
         #print(f"entropia + peso contexto {ctx}: {total} * {H_ctx} = {total * H_ctx} bits/decision (p0={p0:.4f}, p1={p1:.4f})")
-        total_H_bits += total * H_ctx
+        total_H_bits +=  total * H_ctx
         total_bits   += total
-    bpp_bits = total_H_bits / n_pixels
+    #bpp_bits = total_H_bits / n_pixels
 
     # Entropía de los valores crudos
+
     if raw_stream:
-        print("Esto es una prueba",np.unique(raw_stream) )
+        #print("Esto es una prueba",np.unique(raw_stream) )
         bpp_raws = (entropy(raw_stream) * len(raw_stream))/ n_pixels 
+        #print(f"Valoreeeess crudos {raw_stream}")
     else:
         bpp_raws = 0.0
+    
+    # Expected compressed data rate [bits/pixel]
+    R_decision = H_conditional * (n_decision_bits / n_pixels)
 
     #print(f"Entropía bits decisión (con contexto): {bpp_bits} bits/pixel")
     #print(f"Entropía valores crudos: {bpp_raws} bits/pixel")
     return { 
-        "bpp_bits": bpp_bits,
+        "entropy_bits_decision": H_conditional, #H_conditional,
+        "bpp_bits": R_decision ,#bpp_bits,
         "bpp_raws": bpp_raws,   
-        "total": bpp_bits + bpp_raws 
+        "total_bpp": R_decision + bpp_raws 
         }
 
+#---------------------------------------------------------------------------
+
+
+#---------------------------------------------------------------------------
 def pipeline(img):
+
+    #seq = entropy_seq_context(img, encode_pixel, get_neighbors) tratar los bit en grupo 110, 0, 1110, etc
     symbol_stream, raw_stream = encode_to_entropy_input(img)
     encoded = arithmetic_encode(symbol_stream, raw_stream, img.size, img.max() + 1)
+    enconded_offline = arithmetic_encode_offline(symbol_stream, raw_stream, img.size, img.max() + 1)
     encoded['n_pixels'] = int(img.max()) + 1
-    entropy_info = entropy_pattern_context(symbol_stream, raw_stream, img.size)
+    entropy_info_offline = entropy_pattern_context(symbol_stream, raw_stream, img.size)
     decision_bits = [bit for _, _, bit in symbol_stream]
    
+    residuals = encode_image(img)
+    bits_pixel = []
+    for row in residuals:
+        for res in row:
+            joint_bits = "".join(map(str, res['bits']))
+            bits_pixel.append(joint_bits)
+    #print("bits pixel sample:", bits_pixel)
+    #print(f"Entropy: {entropy(bits_pixel)}")
+
     return {
         'n_clases': img.max() + 1,
-        'H_img': entropy(img),
-        'H_bits': entropy(decision_bits) * len(decision_bits) / img.size,
-        'H_limit_total' : entropy_info['total'],
-        'H_limit_bits' : entropy_info['bpp_bits'],
-        'H_limit_raw' : entropy_info['bpp_raws'],
-        'bpp_final'  : encoded['bpp_total'],
-        'bpp_bits'   : encoded['bpp_symbol'],
-        'bpp_raw'      : encoded['bpp_raw'],
-        'overhead_raw' : encoded['bpp_raw'] - entropy_info['bpp_raws'],
-        'overhead_relativo': (encoded['bpp_raw'] - entropy_info['bpp_raws']) / encoded['bpp_raw'] * 100 ,
-        '\\%_bpp_bit': (encoded['bpp_symbol'] / encoded['bpp_total']) * 100,
-        '\\%_bpp_raw': (encoded['bpp_raw'] / encoded['bpp_total']) * 100,
-        'real_impacto': (encoded['bpp_raw'] - entropy_info['bpp_raws']) / encoded['bpp_total'] * 100,
+        'H_img': entropy(img), #Entropía de la imagen original en bits / pixel
+        'H_seq': entropy(bits_pixel), # bits / pixel 
+        #'H_seq_cxt': seq['H_seq_ctx'], # bits / símbolo de secuencia con contexto
+        #'Bits_per_pixel_seq': seq['bpp_bits_seq'], # bits / pixel esperado con secuencia completa sin contexto
+        #'Exp_bit_rate_seq_cxt': entropy_seq['bpp_seq_cxt'], # bits / pixel esperado con secuencia completa y contexto
+        'H_bits': entropy(decision_bits), # entropía de los bits de decisión bit / bit de decisión 
+        #'H_bits_cxt_online': entropy_info['entropy_bits_decision'], # bits / bit de decisión con contexto
+        'H_bits_cxt': entropy_info_offline['entropy_bits_decision'], # bits / bit de decisión con contexto offline
+        'Exp_bit_rate_only_bits_seq': entropy(decision_bits) * len(decision_bits) / img.size, # bits / pixel solo por los bits de decisión sin contexto
+        'Exp_bit_rate' : entropy_info_offline['total_bpp'], # bits / pixel total esperado con contexto
+        'Exp_bit_rate_bits' : entropy_info_offline['bpp_bits'], # bits / pixel solo por los bits de decisión con contexto
+        'Exp_bit_rate_raw' : entropy_info_offline['bpp_raws'], # bits / pixel solo por los valores crudos
+        'bit_rate_final'  : encoded['bpp_total'], # bits / pixel tOTAL
+        'bit_rate_offline' : enconded_offline['bpp_total'], # bits / pixel TOTAL con AC offline
+        'bit_rate_bits'   : encoded['bpp_symbol'], # bits / pixel para los bits de decisión codificados con modelo de contexto
+        'bit_rate_raw'      : encoded['bpp_raw'], # bits / pixel para los valores crudos codificados
        }
 
 def context_model_analysis(img):

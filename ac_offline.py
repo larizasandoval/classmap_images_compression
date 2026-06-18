@@ -1,23 +1,18 @@
 """
-Implementación de codificación aritmética especifica para picewise linear predictor. 
-Basada en el algoritmo clásico de codificación aritmética, 
-pero adaptada para manejar dos flujos de bits: uno para los símbolos (decisiones) y otro para los valores crudos (residuos).
+Implementación de codificación aritmética OFFLINE específica para piecewise linear predictor.
+A diferencia de la versión online, las probabilidades de cada contexto se calculan
+usando TODOS los datos antes de comenzar la codificación (distribución fija).
 
 Creada por Lariza Sandoval, Abril 2026.
-
+Versión offline añadida para comparación con versión online.
 """
 
-
-
-from collections import defaultdict 
+from collections import defaultdict, Counter
 import numpy as np
-from fractions import Fraction
-from collections import Counter
 
 
-
-def arithmetic_encode(symbol_stream: list, raw_stream: list, n_pixels: int,n_classes: int) -> dict:
-    PRECISION = 16#32
+def arithmetic_encode_offline(symbol_stream: list, raw_stream: list, n_pixels: int, n_classes: int) -> dict:
+    PRECISION = 32
     WHOLE     = 1 << PRECISION
     HALF      = WHOLE >> 1
     QUARTER   = WHOLE >> 2
@@ -27,7 +22,17 @@ def arithmetic_encode(symbol_stream: list, raw_stream: list, n_pixels: int,n_cla
     pending = 0
     output  = []
 
-    counts = defaultdict(lambda: [1, 1])
+    # --- PASO 1: calcular distribuciones offline con todos los datos ---
+    # Contamos cuántos 0s y 1s hay por contexto usando todo el symbol_stream
+    counts_offline = defaultdict(lambda: [1, 1])  # Laplace smoothing igual que online
+    for ctx, position, bit in symbol_stream:
+        counts_offline[ctx][bit] += 1
+
+    # Las probabilidades quedan FIJAS para toda la codificación
+    probs = {}
+    for ctx, counts in counts_offline.items():
+        total = counts[0] + counts[1]
+        probs[ctx] = (counts[0], total)  # (n_ceros, total)
 
     def emit_bit(bit):
         nonlocal pending
@@ -36,20 +41,23 @@ def arithmetic_encode(symbol_stream: list, raw_stream: list, n_pixels: int,n_cla
             output.append(1 - bit)
             pending -= 1
 
-    def encode_bit(bit, ctx):
+    def encode_bit_offline(bit, ctx):
         nonlocal low, high, pending
 
-        c     = counts[ctx]
-        total = c[0] + c[1]
-        # mid es el punto de division entre 0 y 1
-        mid   = low + ((high - low + 1) * c[0]) // total - 1
+        # Usamos probabilidades FIJAS, no actualizamos
+        if ctx in probs:
+            n_ceros, total = probs[ctx]
+        else:
+            n_ceros, total = 1, 2  # fallback Laplace
+
+        mid = low + ((high - low + 1) * n_ceros) // total - 1
 
         if bit == 0:
             high = mid
         else:
             low = mid + 1
 
-        counts[ctx][bit] += 1
+        # NO actualizamos probs aquí — esa es la diferencia clave
 
         while True:
             if high < HALF:
@@ -67,8 +75,9 @@ def arithmetic_encode(symbol_stream: list, raw_stream: list, n_pixels: int,n_cla
             else:
                 break
 
+    # --- PASO 2: codificar con probabilidades fijas ---
     for ctx, position, bit in symbol_stream:
-        encode_bit(bit, ctx)
+        encode_bit_offline(bit, ctx)
 
     # Flush
     pending += 1
@@ -77,11 +86,10 @@ def arithmetic_encode(symbol_stream: list, raw_stream: list, n_pixels: int,n_cla
     else:
         emit_bit(1)
 
-    # Raw stream con bits fijos
-    n_classes    = int(max(raw_stream)) + 1 if raw_stream else 2
+    # Raw stream — igual que versión online, fixed-length
     bits_per_raw = int(np.ceil(np.log2(n_classes)))
     raw_output   = []
-    
+
     for val in raw_stream:
         for i in range(bits_per_raw - 1, -1, -1):
             raw_output.append((val >> i) & 1)
@@ -102,7 +110,11 @@ def arithmetic_encode(symbol_stream: list, raw_stream: list, n_pixels: int,n_cla
     }
 
 
-def arithmetic_decode(encoded: dict, symbol_order: list, n_raw: int):
+def arithmetic_decode_offline(encoded: dict, symbol_order: list, n_raw: int, probs_fixed: dict):
+    """
+    Decodificador offline — requiere las mismas probabilidades fijas usadas en la codificación.
+    probs_fixed: dict {ctx: (n_ceros, total)} igual que el encoder genera internamente.
+    """
     PRECISION = 32
     WHOLE     = 1 << PRECISION
     HALF      = WHOLE >> 1
@@ -115,8 +127,6 @@ def arithmetic_decode(encoded: dict, symbol_order: list, n_raw: int):
     value  = 0
     pos    = 0
 
-    counts = defaultdict(lambda: [1, 1])
-
     # Inicializar value con los primeros PRECISION bits
     for i in range(PRECISION):
         value = (value << 1) | (bits[pos] if pos < n_bits else 0)
@@ -125,18 +135,21 @@ def arithmetic_decode(encoded: dict, symbol_order: list, n_raw: int):
     symbol_stream = []
 
     for ctx, position in symbol_order:
-        c     = counts[ctx]
-        total = c[0] + c[1]
-        mid   = low + ((high - low + 1) * c[0]) // total - 1
+        if ctx in probs_fixed:
+            n_ceros, total = probs_fixed[ctx]
+        else:
+            n_ceros, total = 1, 2
+
+        mid = low + ((high - low + 1) * n_ceros) // total - 1
 
         if value <= mid:
             bit  = 0
             high = mid
         else:
-            bit = 1
-            low = mid + 1
+            bit  = 1
+            low  = mid + 1
 
-        counts[ctx][bit] += 1
+        # NO se actualiza — probabilidades fijas
         symbol_stream.append((ctx, position, bit))
 
         while True:
@@ -172,5 +185,3 @@ def arithmetic_decode(encoded: dict, symbol_order: list, n_raw: int):
         raw_stream.append(val)
 
     return symbol_stream, raw_stream
-
-

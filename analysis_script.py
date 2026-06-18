@@ -4,7 +4,7 @@ Script para el análisis de resultados. Genera gráficos y tablas del pipeline
 
 """
 
-from predictor import pipeline, residual_stats,context_model_analysis
+from pipeline import pipeline, residual_stats,context_model_analysis
 from sintetic_img_generator import generate_synthetic_map
 import os
 import numpy as np
@@ -19,14 +19,29 @@ from plots import *
 if __name__ == "__main__":
     
     # Cargar mapas de interes 
-    img_names = os.listdir("curated_maps")
+    '''img_names = os.listdir("curated_maps")
+    
     imgs = [np.fromfile(os.path.join("curated_maps", name), dtype=np.uint8).reshape((512, 614)) 
             for name in img_names]
+    #imgs = [imgs[0]]
+    img_test = np.array([[1, 2, 3,2],
+                     [2, 1, 1,3], 
+                     [3, 3, 1,1],
+                     [1, 1, 1,1]
+                     ], dtype=np.uint8)'''
+    # Cargar mapas de interes 
+    img_names = os.listdir("curated_images/maps")
+    
+    imgs = [np.fromfile(os.path.join("curated_images/maps", name), dtype=np.uint8).reshape((512, 614)) 
+            for name in img_names]
+
+    #Dataframes para almacenar los resultados
 
     entropy_results = [] # Para almacenar los resultados de entropía y tasa de bits de cada imagen
     resisual_stats_results = [] # Para almacenar los resultados de estadísticas de residuos
     context_model_analysis_results = [] # Para almacenar los resultados del análisis del modelo de contexto
 
+    #Aplicar el pipeline a cada imagen y almacenar los resultados
 
     for img in imgs:
         data = pipeline(img)
@@ -50,29 +65,36 @@ if __name__ == "__main__":
     df_paper = pd.DataFrame(datos_paper)
     entropy_results_df = pd.DataFrame(entropy_results).sort_values(by="n_clases").reset_index(drop=True)
     entropy_results_df.to_excel("analisis/entropy_results.xlsx", index=False)
-    entropy_results_df = pd.merge(entropy_results_df, df_paper, on="n_clases", how="left")
+    #print(entropy_results_df)
+    '''entropy_results_df = pd.merge(entropy_results_df, df_paper, on="n_clases", how="left")
     entropy_results_df['diff_bpp'] = (entropy_results_df['bpp_final'] - entropy_results_df['bbp_paper']) / entropy_results_df['bbp_paper'] * 100
     entropy_results_df.to_excel( "analisis/entropy_results_paper_diff.xlsx",
                                  columns=["n_clases", "bbp_paper", "bpp_final", "diff_bpp"],
-                                 index=False)
+                                 index=False)'''
+    '''
     
     #-----Residual stats results
     residual_stats_df = pd.DataFrame(resisual_stats_results)
     residual_stats_df = residual_stats_df.sort_values(by="n_clases")
     residual_stats_df.to_excel("analisis/residual_stats_results.xlsx", index=False)
+    '''
+    
     #-----Context model analysis results
-    temp = [pd.DataFrame(res) for res in context_model_analysis_results]
-    context_model_analysis_df = pd.concat(temp, ignore_index=True).sort_values(by="n_clases").reset_index(drop=True)
-    context_model_analysis_df.to_excel("analisis/context_model_analysis_results.xlsx", index=False)
+    #temp = [pd.DataFrame(res) for res in context_model_analysis_results]
+    #context_model_analysis_df = pd.concat(temp, ignore_index=True).sort_values(by="n_clases").reset_index(drop=True)
+    #context_model_analysis_df.to_excel("analisis/context_model_analysis_results.xlsx", index=False)
     
-    
-    #-----Plots
+    #---------------
+    #-----Plots-----
+    #---------------
 
-    plot_entropy_comparison(entropy_results_df,details=False)
+    #plot_entropy_comparison(entropy_results_df,details=False)
 
-    plot_entropy_comparison(entropy_results_df,details=True)
+    #plot_entropy_comparison(entropy_results_df,details=True)
 
-    plot_residual_stats(residual_stats_df)
+    #plot_residual_stats(residual_stats_df)
 
-    plot_context_model_analysis(context_model_analysis_df)
+    #plot_context_model_analysis(context_model_analysis_df)
+
+    #plot_context_grid_bars(context_model_analysis_df)
     

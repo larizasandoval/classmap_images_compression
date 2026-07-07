@@ -10,13 +10,7 @@ sintetic_img_generator.py
 curated_images/
 analisis2/
 other.py
-images_complete/green_book_corpus/*
-!images_complete/green_book_corpus/airs/maps/
-!images_complete/green_book_corpus/aviris/maps/
-!images_complete/green_book_corpus/casi/maps/
-!images_complete/green_book_corpus/hyperion/maps/
-!images_complete/green_book_corpus/iasi_l1c/maps/
-!images_complete/green_book_corpus/landsat/maps/
+
 analisis/Borrador.docx
 analisis/Comentarios.docx
 analisis/*.xlsx
@@ -26,5 +20,30 @@ analisis/*.xlsx
 
 
 
+# 1. Ignorar TODO lo que esté dentro de la carpeta principal
+images_complete/green_book_corpus/*
 
+# 2. PERO NO ignores las subcarpetas de los satélites (las dejamos abiertas)
+!images_complete/green_book_corpus/airs/
+!images_complete/green_book_corpus/aviris/
+!images_complete/green_book_corpus/casi/
+!images_complete/green_book_corpus/hyperion/
+!images_complete/green_book_corpus/iasi_l1c/
+!images_complete/green_book_corpus/landsat/
+
+# 3. Ahora, ignora todo lo que esté DENTRO de esas subcarpetas...
+images_complete/green_book_corpus/airs/*
+images_complete/green_book_corpus/aviris/*
+images_complete/green_book_corpus/casi/*
+images_complete/green_book_corpus/hyperion/*
+images_complete/green_book_corpus/iasi_l1c/*
+images_complete/green_book_corpus/landsat/*
+
+# 4. ...EXCEPTO las carpetas "maps/" y todo lo que tengan dentro
+!images_complete/green_book_corpus/airs/maps/
+!images_complete/green_book_corpus/aviris/maps/
+!images_complete/green_book_corpus/casi/maps/
+!images_complete/green_book_corpus/hyperion/maps/
+!images_complete/green_book_corpus/iasi_l1c/maps/
+!images_complete/green_book_corpus/landsat/maps/
 

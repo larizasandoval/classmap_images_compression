@@ -1,63 +1,198 @@
+import os
+import re
 import numpy as np
 from sklearn.cluster import KMeans
 
-def cargar_imagen_raw(ruta_archivo, bandas=224, lineas=512, columnas=614, dtype=np.uint16):
+
+def cargar_imagen_dinamica(ruta_archivo):
+    """Carga una imagen multibanda analizando las dimensiones y el tipo de dato
+
+    desde el formato al final del nombre (ej: ...u16be-72x1225x406.raw)
     """
-    Carga una imagen multibanda en formato RAW y la organiza en una matriz indexada (Bandas, Líneas, Columnas).
-    """
-    datos_puros = np.fromfile(ruta_archivo, dtype=dtype)
+    nombre_completo = os.path.basename(ruta_archivo)
+    nombre_sin_ext = os.path.splitext(nombre_completo)[0]
+
+    match = re.search(r"(\w+)-(\d+)x(\d+)x(\d+)$", nombre_sin_ext)
+    if not match:
+        return None
+
+    tipo_dato, z_str, y_str, x_str = match.groups()
+
+    bandas = int(z_str)
+    lineas = int(y_str)
+    columnas = int(x_str)
+
+    if "u16be" in tipo_dato:
+        dt = np.dtype(">u2")
+    elif "u16le" in tipo_dato:
+        dt = np.dtype("<u2")
+    elif "i16be" in tipo_dato:
+        dt = np.dtype(">i2")
+    elif "i16le" in tipo_dato:
+        dt = np.dtype("<i2")
+    elif "u8" in tipo_dato:
+        dt = np.dtype("u1")
+    elif "f32be" in tipo_dato:
+        dt = np.dtype(">f4")
+    else:
+        dt = np.dtype(np.uint16)
+
+    datos_puros = np.fromfile(ruta_archivo, dtype=dt)
     imagen_3d = datos_puros.reshape((bandas, lineas, columnas))
-    return imagen_3d
 
-def clasificar_con_kmeans(imagen_3d, n_clusteres=4):
-    """
-    Aplica el algoritmo K-Means para agrupar las firmas espectrales de la imagen sin supervisión.
-    
-    Parámetros:
-    - imagen_3d: Matriz de dimensiones (bandas, lineas, columnas).
-    - n_clusteres: Número de clases que queremos identificar (ej. Water, Land, Forest, Human Habitat).
-    """
+    return imagen_3d, bandas, lineas, columnas, tipo_dato
+
+
+def construir_vectores_con_contexto_espacial(
+    imagen_3d, bandas_seleccionadas=None, n_bandas=32, ventana=3
+):
+    """Construye vectores de características incluyendo el vecindario 3x3."""
     bandas, lineas, columnas = imagen_3d.shape
-    
-    # 1. Reorganizar la matriz: (bandas, lineas, columnas) -> (lineas * columnas, bandas)
-    # Cada fila es un vector de características (firma espectral de 224 componentes)
-    imagen_espectral = imagen_3d.reshape(bandas, -1).T
-    
-    # 2. Inicializar y entrenar K-Means
-    print(f"Entrenando K-Means para encontrar {n_clusteres} clases espectrales...")
-    # 'mini_batch' o n_init='auto' ayudan a la eficiencia según la versión de sklearn
-    kmeans = KMeans(n_clusters=n_clusteres, init='k-means++', random_state=42, n_init=10)
-    
-    # El modelo encuentra los centroides y asigna una etiqueta a cada píxel
-    predicciones = kmeans.fit_predict(imagen_espectral)
-    
-    # 3. Devolver el mapa de clases a su forma espacial original (líneas, columnas)
-    mapa_clases = predicciones.reshape((lineas, columnas))
-    
-    return mapa_clases
 
-# --- EJEMPLO DE USO ---
+    if bandas_seleccionadas is None:
+        bandas_seleccionadas = np.linspace(0, bandas - 1, n_bandas, dtype=int)
+
+    img_sub = imagen_3d[bandas_seleccionadas, :, :]
+    pad_width = ventana // 2
+
+    img_padded = np.pad(
+        img_sub,
+        pad_width=((0, 0), (pad_width, pad_width), (pad_width, pad_width)),
+        mode="reflect",
+    )
+
+    vectores_caracteristicas = []
+    for i in range(ventana):
+        for j in range(ventana):
+            vecino = img_padded[:, i : i + lineas, j : j + columnas]
+            vecino_aplanado = vecino.reshape((n_bandas, -1)).T
+            vectores_caracteristicas.append(vecino_aplanado)
+
+    return np.hstack(vectores_caracteristicas)
+
+
+def clasificar_con_kmeans_contextual(
+    imagen_3d, n_clusteres=9, n_bandas=32, ventana=3
+):
+    """Ejecuta el clustering K-Means."""
+    _, lineas, columnas = imagen_3d.shape
+    X_contextual = construir_vectores_con_contexto_espacial(
+        imagen_3d, n_bandas=n_bandas, ventana=ventana
+    )
+
+    kmeans = KMeans(
+        n_clusters=n_clusteres, init="k-means++", random_state=42, n_init=10
+    )
+    predicciones = kmeans.fit_predict(X_contextual)
+    return predicciones.reshape((lineas, columnas))
+
+
+# --- PROCESAMIENTO OPTIMIZADO Y CONTROLADO ---
 if __name__ == "__main__":
-    # Dimensiones basadas en las escenas del artículo
-    BANDAS = 224
-    LINEAS = 512
-    COLUMNAS = 614
-    
-    ruta_raw = "curated_images/f970620t01p02_r03_sc01.c-s16be-224x512x614.raw"
-    
-    try:
-        # Carga del volumen de datos hiperespectrales
-        img_hiper = cargar_imagen_raw(ruta_raw, bandas=BANDAS, lineas=LINEAS, columnas=COLUMNAS)
-        
-        # Definimos el número de clases (por ejemplo, 4 clases como el mapa conceptual del paper)
-        N_CLASSES = 15 
-        
-        # Ejecutar la segmentación espectral automática
-        mapa_de_clases_kmeans = clasificar_con_kmeans(img_hiper, n_clusteres=N_CLASSES)
-        
-        # Guardar el mapa resultante en formato binario RAW (valores del 0 al 3)
-        mapa_de_clases_kmeans.astype(np.uint8).tofile(f"curated_images/mapa_kmeans_final_{N_CLASSES}_clases.raw")
-        print("¡Proceso completado! El mapa no supervisado por K-Means se guardó exitosamente.")
-        
-    except FileNotFoundError:
-        print(f"No se pudo encontrar el archivo en la ruta: {ruta_raw}")
+    path_raiz = "images_complete/green_book_corpus"
+
+    # =========================================================================
+    # CONFIGURACIÓN DE CONTROL DE CÓMPUTO
+    # =========================================================================
+    # Opción A: Procesar todo -> CARPETAS_A_PROCESAR = None
+    # Opción B: Procesar solo sensores específicos -> CARPETAS_A_PROCESAR = ['landsat', 'aviris']
+    # Pon aquí los nombres exactos de las subcarpetas que quieres procesar en esta tanda.
+    CARPETAS_A_PROCESAR = ['msg']#None
+
+    # Granularidades de clases (Xie & Klimesh)
+    N_CLASSES = [4, 7, 9, 17, 32]
+    # =========================================================================
+
+    if not os.path.exists(path_raiz):
+        print(f"La carpeta raíz '{path_raiz}' no existe.")
+        exit()
+
+    print(f"Iniciando escaneo de imágenes en: {path_raiz}")
+
+    for raiz_actual, subcarpetas, archivos in os.walk(path_raiz):
+        # Saltarse las carpetas de mapas resultantes
+        if "maps" in raiz_actual:
+            continue
+
+        # Obtener el nombre de la carpeta del sensor actual
+        nombre_sensor = os.path.basename(raiz_actual)
+
+        # FILTRO 1: Si definiste carpetas específicas y la actual no está en la lista, la saltamos
+        if (
+            CARPETAS_A_PROCESAR is not None
+            and nombre_sensor not in CARPETAS_A_PROCESAR
+        ):
+            continue
+
+        for archivo in archivos:
+            ruta_completa_archivo = os.path.join(raiz_actual, archivo)
+
+            # Intentar verificar si es una imagen válida mediante el nombre
+            nombre_base_archivo = os.path.splitext(archivo)[0]
+            match_verificacion = re.search(
+                r"(\w+)-(\d+)x(\d+)x(\d+)$", nombre_base_archivo
+            )
+
+            if not match_verificacion:
+                continue
+
+            # Crear ruta de la carpeta de mapas para este sensor
+            carpeta_destino_maps = os.path.join(raiz_actual, "maps")
+            os.makedirs(carpeta_destino_maps, exist_ok=True)
+
+            # FILTRO 2: Comprobar qué mapas de esta imagen YA fueron generados antes
+            clases_pendientes = []
+            for n_clases in N_CLASSES:
+                nombre_salida_esperado = os.path.join(
+                    carpeta_destino_maps,
+                    f"mapa_{nombre_base_archivo}_kmeans_{n_clases}clases.raw",
+                )
+                if not os.path.exists(nombre_salida_esperado):
+                    clases_pendientes.append(n_clases)
+
+            # Si ya se generaron todos los mapas para este archivo, nos lo saltamos por completo
+            if not clases_pendientes:
+                print(
+                    f"  [Saltado] {archivo} ya tiene todos sus mapas generados."
+                )
+                continue
+
+            # --- CARGA ASÍNCRONA/DEMANDADA (Solo lee si hace falta calcular algo) ---
+            resultado_carga = cargar_imagen_dinamica(ruta_completa_archivo)
+            if resultado_carga is None:
+                continue
+
+            img_hiper, bandas, lineas, columnas, tipo_dato = resultado_carga
+
+            print("-" * 70)
+            print(f"Sensor: [{nombre_sensor}] | Archivo: {archivo}")
+            print(
+                f"  -> Ejecutando clases pendientes: {clases_pendientes} de {N_CLASSES}"
+            )
+
+            try:
+                N_BANDAS_SUB = min(32, bandas)
+
+                for n_clases in clases_pendientes:
+                    mapa_contextual = clasificar_con_kmeans_contextual(
+                        img_hiper,
+                        n_clusteres=n_clases,
+                        n_bandas=N_BANDAS_SUB,
+                        ventana=3,
+                    )
+
+                    nombre_salida = os.path.join(
+                        carpeta_destino_maps,
+                        f"mapa_{re.sub(r'-[us]16(be|le)-\d+x\d+x\d+$', '', nombre_base_archivo)}_{n_clases}clases-u8be-1x{lineas}x{columnas}_.raw",
+                    )
+                    mapa_contextual.astype(np.uint8).tofile(nombre_salida)
+                    print(f"    [OK] Creado: K-Means {n_clases} clases")
+
+            except Exception as e:
+                print(
+                    f"  [Error] Falló el procesamiento del archivo {archivo}: {e}"
+                )
+
+    print("\n" + "=" * 70)
+    print("¡Tanda de procesamiento finalizada!")
+    print("=" * 70)

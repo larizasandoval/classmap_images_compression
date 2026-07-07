@@ -3,7 +3,7 @@ Script para el análisis de resultados. Genera gráficos y tablas del pipeline
 
 """
 
-from pipeline import pipeline, residual_stats,context_model_analysis
+from pipeline2 import pipeline, residual_stats,context_model_analysis
 from sintetic_img_generator import generate_synthetic_map
 import os
 import numpy as np
@@ -54,7 +54,7 @@ if __name__ == "__main__":
                 # 2. Separamos el bloque por las 'x' -> ['6', '1024', '1024']
                 dimensiones = bloque_dimensiones.split('x')
                 
-                # 3. Aplicamos regla Z-Y-X: ignoramos dimensiones[0] y tomamos las otras dos
+                # 3. Aplicamos tu regla Z-Y-X: ignoramos dimensiones[0] y tomamos las otras dos
                 filas = int(dimensiones[1])     # y
                 columnas = int(dimensiones[2].replace('.raw', ''))  # x
                 
@@ -108,7 +108,7 @@ if __name__ == "__main__":
     df_paper = pd.DataFrame(datos_paper)
     
     # --- Guardar Resultados de Entropía sin sobrescribir ---
-    entropy_file = "analisis/entropy_results.xlsx"
+    entropy_file = "analisis2//entropy_results.xlsx"
     entropy_results_df = pd.DataFrame(entropy_results)
     
     if os.path.exists(entropy_file):

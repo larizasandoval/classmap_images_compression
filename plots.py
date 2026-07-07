@@ -111,7 +111,7 @@ def plot_residual_stats(residual_stats_df):
     sns.set_style("white")
 
     # Paleta secuencial/cualitativa sobria y distinguible en escala de grises
-    colors = ["#4c72b0", "#55a868", "#dd8452", "#c44e52", "#8172b3"]
+    colors = ["#003f5c", "#2c2c7fb8", "#41ab5d", "#fe9929", "#d7301f"]
 
     # 4. Construcción de las barras apiladas (Stacked Bar)
     # En Matplotlib, el truco consiste en usar el argumento 'bottom' para apilar los datos previos
@@ -212,7 +212,7 @@ def plot_context_model_analysis(context_model_analysis_df):
 
     # Asegurar que el eje Y se lea perfectamente recto
     plt.yticks(rotation=0)
-
+    
     plt.tight_layout()
 
     # 5. Guardar copias
@@ -451,7 +451,33 @@ def plot_context_grid_bars(context_model_analysis_df):
             
             # Leyenda académica
             ax.legend(loc="upper right", frameon=True, edgecolor="black", framealpha=0.9)
-            
+                    # ==========================================
+            # MODIFICACIONES DE TAMAÑO DE FUENTE
+            # ==========================================
+
+            #< 1. Etiquetas de los ejes principales (X e Y)
+            '''ax.set_xlabel(
+                "Contexts", fontsize=13
+            )  # <--- CAMBIO AQUÍ
+            ax.set_ylabel(
+                "Total decision bits", fontsize=10
+            )  # <--- CAMBIO AQUÍ'''
+
+            # 2. Números/valores de las escalas (ticks) de los ejes
+            ax.tick_params(axis="x", labelsize=11)  # <--- CAMBIO AQUÍ
+            ax.tick_params(axis="y", labelsize=14)  # <--- CAMBIO AQUÍ
+
+            # 3. Tamaño del texto de la Leyenda
+            ax.legend(
+                #title="",
+                #loc="upper left",
+                #frameon=True,
+                edgecolor="black",
+                framealpha=0.9,
+                #title_fontsize=11,  # <--- Tamaño del título de la leyenda
+                fontsize=12,  # <--- Tamaño de los elementos de la leyenda
+            )
+            # ==========================================
             sns.despine(ax=ax)
 
         # 3. Formatear el eje X (solo en el último panel gracias a sharex=True)

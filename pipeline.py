@@ -23,6 +23,7 @@ Funciones:
 import numpy as np
 from aritmetic import arithmetic_encode, arithmetic_decode
 from ac_offline import arithmetic_encode_offline
+from aritmetic2 import arithmetic_encode as arithmetic_test
 from collections import defaultdict
 #import pandas as pd
 
@@ -307,7 +308,7 @@ def pipeline(img):
 
     #seq = entropy_seq_context(img, encode_pixel, get_neighbors) tratar los bit en grupo 110, 0, 1110, etc
     symbol_stream, raw_stream = encode_to_entropy_input(img)
-    encoded = arithmetic_encode(symbol_stream, raw_stream, img.size, img.max() + 1)
+    encoded = arithmetic_test(symbol_stream, raw_stream, img.size, img.max() + 1)
     enconded_offline = arithmetic_encode_offline(symbol_stream, raw_stream, img.size, img.max() + 1)
     encoded['n_pixels'] = int(img.max()) + 1
     entropy_info_offline = entropy_pattern_context(symbol_stream, raw_stream, img.size)
